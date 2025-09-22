@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insta Follower Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <div id="app" class="min-h-screen flex flex-col items-center p-4">
+        <div class="w-full max-w-2xl mx-auto bg-gray-800 rounded-lg shadow-xl p-6">
+            <header class="text-center mb-6">
+                <h1 class="text-4xl font-bold text-indigo-400">Insta-Checker</h1>
+                <p class="text-gray-400 mt-2">Find out who doesn't follow you back.</p>
+            </header>
+
+            <div class="mb-6 bg-gray-700/50 p-4 rounded-lg">
+                <details>
+                    <summary class="cursor-pointer font-semibold text-lg text-indigo-300">
+                        How do I get the files?
+                    </summary>
+                    <div class="mt-4 text-gray-300">
+                        <ol class="list-decimal list-inside space-y-2">
+                            <li>Go to your Instagram profile and tap the menu icon (☰).</li>
+                            <li>Select <strong>"Your activity"</strong>.</li>
+                            <li>Scroll to the bottom and tap <strong>"Download your information"</strong>.</li>
+                            <li>Tap <strong>"Request a download"</strong>, select your profile.</li>
+                            <li>Choose <strong>"Select types of information"</strong>.</li>
+                            <li>Select only <strong>"Followers and following"</strong> and tap Next.</li>
+                            <li>Make sure the format is set to <strong>HTML</strong>, then submit the request.</li>
+                            <li>Instagram will email you a link to a ZIP file. Download and unzip it.</li>
+                            <li>Inside, find the <strong>"followers_and_following"</strong> folder. Your files are in there!</li>
+                        </ol>
+                    </div>
+                </details>
+            </div>
+
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="flex flex-col">
+                        <label class="mb-2 font-semibold text-gray-300">1. Upload Followers File(s)</label>
+                        <input type="file" multiple id="followersInput" class="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600"/>
+                        <p id="followersCount" class="text-sm text-green-400 mt-2"></p>
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="mb-2 font-semibold text-gray-300">2. Upload Following File(s)</label>
+                        <input type="file" multiple id="followingInput" class="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-500 file:text-white hover:file:bg-indigo-600"/>
+                        <p id="followingCount" class="text-sm text-green-400 mt-2"></p>
+                    </div>
+                </div>
+
+                <button id="findBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-300">
+                    Find Who Doesn't Follow Back
+                </button>
+                <p id="errorText" class="text-red-400 text-center"></p>
+            </div>
+
+            <div id="resultsContainer" class="mt-8 hidden">
+                <h2 id="resultsHeader" class="text-2xl font-bold text-center mb-4"></h2>
+                <ul id="resultsList" class="bg-gray-700 p-4 rounded-lg max-h-96 overflow-y-auto">
+                    </ul>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center p-4 text-gray-400 border-t border-gray-700">
+        <p>Made with 💖 by Gourav.</p>
+        <div class="mt-2">
+            <button id="contactBtn" class="text-indigo-400 hover:text-indigo-300">
+                Copy email for feedback
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Get references to all the important HTML elements ---
+            const followersInput = document.getElementById('followersInput');
+            const followingInput = document.getElementById('followingInput');
+            const findBtn = document.getElementById('findBtn');
+            const followersCountEl = document.getElementById('followersCount');
+            const followingCountEl = document.getElementById('followingCount');
+            const errorTextEl = document.getElementById('errorText');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const resultsHeader = document.getElementById('resultsHeader');
+            const resultsList = document.getElementById('resultsList');
+            const contactBtn = document.getElementById('contactBtn');
+            
+            // --- UPDATE YOUR EMAIL HERE ---
+            const myEmail = 'gouravgarg1710@gmail.com'; 
+
+            // --- Click to Copy Logic ---
+            contactBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(myEmail).then(() => {
+                    contactBtn.textContent = 'Email Copied!';
+                    setTimeout(() => {
+                        contactBtn.textContent = 'Copy email for feedback';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Could not copy text: ', err);
+                });
+            });
+
+            // --- Variables to store the sets of usernames ---
+            let followersSet = null;
+            let followingSet = null;
+
+            // --- Helper function to parse usernames from an HTML file ---
+            const parseHtmlFile = (file) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const htmlContent = event.target.result;
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlContent, 'text/html');
+                        const links = doc.querySelectorAll('a');
+                        const usernames = new Set();
+                        links.forEach(link => {
+                            if (link.textContent) usernames.add(link.textContent);
+                        });
+                        resolve(usernames);
+                    };
+                    reader.onerror = (error) => reject(error);
+                    reader.readAsText(file);
+                });
+            };
+            
+            // --- Generic handler for file input changes ---
+            const handleFileChange = async (event, type) => {
+                const files = Array.from(event.target.files);
+                if (files.length === 0) return;
+                
+                try {
+                    errorTextEl.textContent = ''; // Clear previous errors
+                    const combinedUsernames = new Set();
+                    for (const file of files) {
+                        const usernames = await parseHtmlFile(file);
+                        usernames.forEach(user => combinedUsernames.add(user));
+                    }
+                    if (type === 'followers') {
+                        followersSet = combinedUsernames;
+                        followersCountEl.textContent = `${followersSet.size} followers loaded.`;
+                    } else {
+                        followingSet = combinedUsernames;
+                        followingCountEl.textContent = `${followingSet.size} accounts following.`;
+                    }
+                } catch (err) {
+                    errorTextEl.textContent = 'Could not parse files. Please ensure they are correct.';
+                }
+            };
+            
+            // --- Attach event listeners to the file inputs ---
+            followersInput.addEventListener('change', (e) => handleFileChange(e, 'followers'));
+            followingInput.addEventListener('change', (e) => handleFileChange(e, 'following'));
+
+            // --- Logic to run when the main button is clicked ---
+            findBtn.addEventListener('click', () => {
+                if (!followersSet || !followingSet) {
+                    errorTextEl.textContent = 'Please upload both follower and following files first.';
+                    return;
+                }
+
+                findBtn.disabled = true;
+                findBtn.textContent = 'Analyzing...';
+                
+                // Simulate a short delay for better UX
+                setTimeout(() => {
+                    const notFollowingBack = new Set([...followingSet].filter(user => !followersSet.has(user)));
+                    const sortedResults = Array.from(notFollowingBack).sort();
+                    
+                    displayResults(sortedResults);
+
+                    findBtn.disabled = false;
+                    findBtn.textContent = "Find Who Doesn't Follow Back";
+                }, 500);
+            });
+
+            // --- Function to display the results on the page ---
+            const displayResults = (users) => {
+                resultsList.innerHTML = ''; // Clear any old results
+
+                if (users.length > 0) {
+                    resultsHeader.innerHTML = `Found <span class="text-yellow-400">${users.length}</span> Accounts That Don't Follow You Back`;
+                    users.forEach(user => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center p-3 border-b border-gray-600 hover:bg-gray-600';
+                        
+                        li.innerHTML = `
+                            <span class="font-mono">${user}</span>
+                            <a href="https://www.instagram.com/${user}" target="_blank" rel="noopener noreferrer" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-3 rounded-full transition-colors">
+                                Visit Profile
+                            </a>
+                        `;
+                        resultsList.appendChild(li);
+                    });
+                    resultsContainer.classList.remove('hidden');
+                } else {
+                    resultsHeader.textContent = "🎉 Great news! Everyone you follow also follows you back.";
+                    resultsContainer.classList.remove('hidden');
+                }
+            };
+        });
+    </script>
+</body>
+</html>
